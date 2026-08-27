@@ -1,23 +1,7 @@
-import os
 import json
 import re
 from http.server import BaseHTTPRequestHandler
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
 
-
-# ============================================================
-# HUGGING FACE CONFIGURATION
-# ============================================================
-
-HF_TOKEN = os.environ.get("HF_TOKEN")
-
-MODEL = "openai/gpt-oss-120b:together"
-
-
-# ============================================================
-# HEART HEALTH KNOWLEDGE BASE
-# ============================================================
 
 DOCUMENTS = [
     {
@@ -30,22 +14,27 @@ Eat Better, Be More Active, Quit Tobacco, Get Healthy Sleep, Manage Weight,
 Control Cholesterol, Manage Blood Sugar, and Manage Blood Pressure.
 
 A healthy eating pattern can include whole foods, fruits and vegetables,
-whole grains, lean protein, nuts and seeds. Limiting foods high in sodium,
-added sugars and unhealthy fats can support cardiovascular health.
+whole grains, lean protein, nuts and seeds.
+
+Limiting foods high in sodium, added sugars and unhealthy fats can support
+cardiovascular health.
 
 Adults should generally aim for 150 minutes of moderate-intensity physical
-activity per week or 75 minutes of vigorous activity. Avoiding nicotine and
-tobacco exposure is an important part of cardiovascular health.
+activity per week or 75 minutes of vigorous activity.
+
+Avoiding nicotine and tobacco exposure is an important part of cardiovascular
+health.
 """
     },
-
     {
         "source": "World Health Organization",
         "title": "WHO - Cardiovascular Diseases",
         "url": "https://www.who.int/health-topics/cardiovascular-diseases",
         "text": """
 Cardiovascular diseases are a group of disorders of the heart and blood
-vessels. Behavioral risk factors include unhealthy diet, physical inactivity,
+vessels.
+
+Behavioral risk factors include unhealthy diet, physical inactivity,
 tobacco use and harmful use of alcohol.
 
 These behaviors may contribute to increased blood pressure, increased blood
@@ -58,10 +47,6 @@ alcohol use can reduce cardiovascular risk.
     }
 ]
 
-
-# ============================================================
-# SAFETY TERMS
-# ============================================================
 
 EMERGENCY_TERMS = [
     "severe chest pain",
@@ -105,34 +90,25 @@ INSUFFICIENT = (
 )
 
 
-# ============================================================
-# QUESTION CATEGORY
-# ============================================================
-
 def category(question):
 
     q = question.lower().strip()
 
-    if any(x in q for x in EMERGENCY_TERMS):
+    if any(term in q for term in EMERGENCY_TERMS):
         return "EMERGENCY"
 
-    if any(x in q for x in MEDICATION_TERMS):
+    if any(term in q for term in MEDICATION_TERMS):
         return "MEDICATION"
 
-    if any(x in q for x in DIAGNOSIS_TERMS):
+    if any(term in q for term in DIAGNOSIS_TERMS):
         return "DIAGNOSIS"
 
     return "NORMAL"
 
 
-# ============================================================
-# SAFETY RESPONSES
-# ============================================================
-
 def safety_response(cat):
 
     if cat == "EMERGENCY":
-
         return (
             "⚠️ This may be a medical emergency.\n\n"
             "If you are experiencing severe chest pain, difficulty breathing, "
@@ -142,31 +118,23 @@ def safety_response(cat):
         )
 
     if cat == "MEDICATION":
-
         return (
             "I can provide general educational information about heart health, "
             "but I cannot recommend a medication, dosage, prescription, or "
             "whether you should start or stop a medicine.\n\n"
-            "For medication decisions, please speak with a qualified "
-            "healthcare professional."
+            "For medication decisions, please speak with a qualified healthcare professional."
         )
 
     if cat == "DIAGNOSIS":
-
         return (
             "I can provide general educational information about heart health, "
             "but I cannot diagnose a medical condition or determine whether "
             "you are having a heart attack or another cardiovascular condition.\n\n"
-            "If you are experiencing concerning or severe symptoms, seek "
-            "medical attention promptly."
+            "If you are experiencing concerning or severe symptoms, seek medical attention promptly."
         )
 
     return None
 
-
-# ============================================================
-# SIMPLE RAG RETRIEVAL
-# ============================================================
 
 def retrieve(question):
 
@@ -193,13 +161,12 @@ def retrieve(question):
         )
 
         if score > 0:
-
             results.append(
                 (score, document)
             )
 
     results.sort(
-        key=lambda x: x[0],
+        key=lambda item: item[0],
         reverse=True
     )
 
@@ -209,444 +176,244 @@ def retrieve(question):
     ]
 
 
-# ============================================================
-# HUGGING FACE API
-# ============================================================
+def create_answer(question, documents):
 
-def ask_model(question, context):
+    q = question.lower()
 
-    if not HF_TOKEN:
-
-        raise RuntimeError(
-            "HF_TOKEN is not configured in Vercel."
-        )
-
-
-    system_prompt = """
-You are a heart-health educational assistant.
-
-Answer ONLY using the supplied CONTEXT.
-
-Rules:
-
-1. Do not use facts outside the supplied context.
-2. Do not diagnose.
-3. Do not recommend medication or dosage.
-4. If the context does not contain enough information, respond exactly:
-
-I don't have enough information in my current heart-health knowledge base to answer that question reliably.
-
-5. Keep answers concise and educational.
-"""
-
-
-    payload = json.dumps({
-
-        "model": MODEL,
-
-        "messages": [
-
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-
-            {
-                "role": "user",
-                "content":
-                    "CONTEXT:\n"
-                    + context
-                    + "\n\nQUESTION:\n"
-                    + question
-            }
-
-        ],
-
-        "temperature": 0,
-
-        "max_tokens": 250
-
-    }).encode("utf-8")
-
-
-    request = Request(
-
-        "https://router.huggingface.co/v1/chat/completions",
-
-        data=payload,
-
-        headers={
-
-            "Authorization":
-                "Bearer " + HF_TOKEN,
-
-            "Content-Type":
-                "application/json"
-
-        },
-
-        method="POST"
-    )
-
-
-    try:
-
-        with urlopen(
-            request,
-            timeout=60
-        ) as response:
-
-            response_body = (
-                response
-                .read()
-                .decode("utf-8")
-            )
-
-
-    except HTTPError as error:
-
-        error_body = (
-            error
-            .read()
-            .decode(
-                "utf-8",
-                errors="replace"
-            )
-        )
-
-        raise RuntimeError(
-            f"Hugging Face HTTP {error.code}: {error_body}"
-        )
-
-
-    except URLError as error:
-
-        raise RuntimeError(
-            "Unable to connect to Hugging Face: "
-            + str(error.reason)
-        )
-
-
-    try:
-
-        data = json.loads(
-            response_body
-        )
-
-    except Exception:
-
-        raise RuntimeError(
-            "Invalid response from Hugging Face: "
-            + response_body
-        )
-
-
-    try:
+    if any(word in q for word in [
+        "food",
+        "eat",
+        "diet",
+        "eating"
+    ]):
 
         return (
-            data["choices"][0]
-            ["message"]["content"]
-            .strip()
+            "A heart-healthy eating pattern can include whole foods, "
+            "fruits and vegetables, whole grains, lean protein, nuts and seeds. "
+            "Limiting foods high in sodium, added sugars and unhealthy fats "
+            "can support cardiovascular health."
         )
 
-    except Exception:
+    if any(word in q for word in [
+        "exercise",
+        "activity",
+        "physical",
+        "workout"
+    ]):
 
-        raise RuntimeError(
-            "Unexpected Hugging Face response: "
-            + json.dumps(data)
+        return (
+            "Adults should generally aim for 150 minutes of moderate-intensity "
+            "physical activity per week or 75 minutes of vigorous activity. "
+            "Regular physical activity is an important part of cardiovascular health."
         )
 
+    if any(word in q for word in [
+        "smoking",
+        "tobacco",
+        "nicotine"
+    ]):
 
-# ============================================================
-# GENERATE ANSWER
-# ============================================================
+        return (
+            "Avoiding nicotine and tobacco exposure is an important part of "
+            "cardiovascular health. Stopping tobacco use can reduce cardiovascular risk."
+        )
+
+    if any(word in q for word in [
+        "salt",
+        "sodium"
+    ]):
+
+        return (
+            "Reducing salt in the diet can help reduce cardiovascular risk. "
+            "The American Heart Association also recommends limiting foods "
+            "high in sodium."
+        )
+
+    if any(word in q for word in [
+        "heart health",
+        "cardiovascular health",
+        "healthy heart"
+    ]):
+
+        return (
+            "The American Heart Association's Life's Essential 8 identifies "
+            "eight key measures for cardiovascular health: Eat Better, "
+            "Be More Active, Quit Tobacco, Get Healthy Sleep, Manage Weight, "
+            "Control Cholesterol, Manage Blood Sugar, and Manage Blood Pressure."
+        )
+
+    if any(word in q for word in [
+        "risk",
+        "risk factors",
+        "cause",
+        "causes"
+    ]):
+
+        return (
+            "Important behavioral cardiovascular risk factors include an "
+            "unhealthy diet, physical inactivity, tobacco use and harmful "
+            "use of alcohol. These behaviors may contribute to increased "
+            "blood pressure, blood glucose, blood lipids and overweight or obesity."
+        )
+
+    if documents:
+
+        return (
+            "Based on the current heart-health knowledge base: "
+            + documents[0]["text"].strip()
+        )
+
+    return INSUFFICIENT
+
 
 def generate_answer(question):
 
     cat = category(question)
 
-
     if cat != "NORMAL":
 
         return {
-
-            "answer":
-                safety_response(cat),
-
-            "sources":
-                [],
-
-            "category":
-                cat
-
+            "answer": safety_response(cat),
+            "sources": [],
+            "category": cat
         }
 
-
     documents = retrieve(question)
-
 
     if not documents:
 
         return {
-
-            "answer":
-                INSUFFICIENT,
-
-            "sources":
-                [],
-
-            "category":
-                "INSUFFICIENT_CONTEXT"
-
+            "answer": INSUFFICIENT,
+            "sources": [],
+            "category": "INSUFFICIENT_CONTEXT"
         }
 
-
-    context = "\n\n---\n\n".join(
-
-        "SOURCE: "
-        + d["source"]
-
-        + "\nTITLE: "
-        + d["title"]
-
-        + "\n"
-        + d["text"]
-
-        for d in documents
-
+    answer = create_answer(
+        question,
+        documents
     )
 
-
-    try:
-
-        answer = ask_model(
-            question,
-            context
-        )
-
-
-    except Exception as e:
-
-        return {
-
-            "answer":
-                f"AI ERROR: {str(e)}",
-
-            "sources":
-                [],
-
-            "category":
-                "ERROR"
-
-        }
-
-
     return {
-
-        "answer":
-            answer,
-
-        "sources":
-
-            [
-
-                {
-
-                    "source":
-                        d["source"],
-
-                    "title":
-                        d["title"],
-
-                    "url":
-                        d["url"]
-
-                }
-
-                for d in documents
-
-            ],
-
-        "category":
-            "NORMAL"
-
+        "answer": answer,
+        "sources": [
+            {
+                "source": document["source"],
+                "title": document["title"],
+                "url": document["url"]
+            }
+            for document in documents
+        ],
+        "category": "NORMAL"
     }
 
 
-# ============================================================
-# VERCEL SERVERLESS HANDLER
-# ============================================================
-
 class handler(BaseHTTPRequestHandler):
 
-
-    def send_json(
-        self,
-        status,
-        data
-    ):
+    def send_json(self, status, data):
 
         body = json.dumps(
             data,
             ensure_ascii=False
         ).encode("utf-8")
 
-
-        self.send_response(
-            status
-        )
-
+        self.send_response(status)
 
         self.send_header(
             "Content-Type",
             "application/json; charset=utf-8"
         )
 
-
         self.send_header(
             "Access-Control-Allow-Origin",
             "*"
         )
-
 
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type"
         )
 
-
         self.send_header(
             "Access-Control-Allow-Methods",
             "GET,POST,OPTIONS"
         )
 
-
         self.end_headers()
 
+        self.wfile.write(body)
 
-        self.wfile.write(
-            body
-        )
-
-
-    # ========================================================
-    # OPTIONS
-    # ========================================================
 
     def do_OPTIONS(self):
 
         self.send_json(
-
             200,
-
-            {
-                "ok": True
-            }
-
+            {"ok": True}
         )
 
-
-    # ========================================================
-    # GET
-    # ========================================================
 
     def do_GET(self):
 
         self.send_json(
-
             200,
-
             {
-
-                "status":
-                    "ok",
-
-                "message":
-                    "Heart Health RAG API is running."
-
+                "status": "ok",
+                "message": "Heart Health RAG API is running."
             }
-
         )
 
-
-    # ========================================================
-    # POST
-    # ========================================================
 
     def do_POST(self):
 
         try:
 
             length = int(
-
                 self.headers.get(
                     "Content-Length",
                     "0"
                 )
-
             )
 
-
-            body = self.rfile.read(
+            raw_body = self.rfile.read(
                 length
-            )
-
+            ).decode("utf-8")
 
             data = json.loads(
-
-                body.decode(
-                    "utf-8"
-                )
-
+                raw_body
             )
 
-
             question = str(
-
                 data.get(
                     "question",
                     ""
                 )
-
             ).strip()
-
 
             if not question:
 
                 self.send_json(
-
                     400,
-
                     {
-                        "error":
-                            "Please enter a question."
+                        "error": "Please enter a question."
                     }
-
                 )
 
                 return
 
-
             result = generate_answer(
                 question
             )
-
 
             self.send_json(
                 200,
                 result
             )
 
-
         except Exception as e:
 
             self.send_json(
-
                 500,
-
                 {
-                    "error":
-                        str(e)
+                    "error": "Unable to process the request.",
+                    "details": str(e)
                 }
-
             )
