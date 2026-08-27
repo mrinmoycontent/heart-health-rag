@@ -283,13 +283,9 @@ def generate_answer(question):
             context
         )
 
-    except Exception:
-
+        except Exception as e:
         return {
-            "answer": (
-                "⚠️ The AI service is temporarily unavailable. "
-                "Please try again."
-            ),
+            "answer": f"AI ERROR: {str(e)}",
             "sources": [],
             "category": "ERROR"
         }
