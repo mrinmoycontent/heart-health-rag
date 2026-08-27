@@ -10,7 +10,7 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 
 MODEL = os.environ.get(
     "HF_MODEL",
-    "openai/gpt-oss-120b:fastest"
+    "openai/gpt-oss-120b:groq"
 )
 
 
