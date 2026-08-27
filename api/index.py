@@ -7,12 +7,12 @@ from urllib.error import HTTPError, URLError
 
 
 # ============================================================
-# HUGGING FACE
+# HUGGING FACE CONFIGURATION
 # ============================================================
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
-MODEL = "openai/gpt-oss-120b:fastest"
+MODEL = "openai/gpt-oss-120b:together"
 
 
 # ============================================================
@@ -26,27 +26,16 @@ DOCUMENTS = [
         "url": "https://www.heart.org/en/healthy-living/healthy-lifestyle/lifes-essential-8",
         "text": """
 Life's Essential 8 identifies eight key measures for cardiovascular health:
-
-Eat Better
-Be More Active
-Quit Tobacco
-Get Healthy Sleep
-Manage Weight
-Control Cholesterol
-Manage Blood Sugar
-Manage Blood Pressure
+Eat Better, Be More Active, Quit Tobacco, Get Healthy Sleep, Manage Weight,
+Control Cholesterol, Manage Blood Sugar, and Manage Blood Pressure.
 
 A healthy eating pattern can include whole foods, fruits and vegetables,
-whole grains, lean protein, nuts and seeds.
-
-Limiting foods high in sodium, added sugars and unhealthy fats can support
-cardiovascular health.
+whole grains, lean protein, nuts and seeds. Limiting foods high in sodium,
+added sugars and unhealthy fats can support cardiovascular health.
 
 Adults should generally aim for 150 minutes of moderate-intensity physical
-activity per week or 75 minutes of vigorous activity.
-
-Avoiding nicotine and tobacco exposure is an important part of cardiovascular
-health.
+activity per week or 75 minutes of vigorous activity. Avoiding nicotine and
+tobacco exposure is an important part of cardiovascular health.
 """
     },
 
@@ -56,9 +45,7 @@ health.
         "url": "https://www.who.int/health-topics/cardiovascular-diseases",
         "text": """
 Cardiovascular diseases are a group of disorders of the heart and blood
-vessels.
-
-Behavioral risk factors include unhealthy diet, physical inactivity,
+vessels. Behavioral risk factors include unhealthy diet, physical inactivity,
 tobacco use and harmful use of alcohol.
 
 These behaviors may contribute to increased blood pressure, increased blood
@@ -73,7 +60,7 @@ alcohol use can reduce cardiovascular risk.
 
 
 # ============================================================
-# SAFETY FILTERS
+# SAFETY TERMS
 # ============================================================
 
 EMERGENCY_TERMS = [
@@ -126,20 +113,20 @@ def category(question):
 
     q = question.lower().strip()
 
-    if any(term in q for term in EMERGENCY_TERMS):
+    if any(x in q for x in EMERGENCY_TERMS):
         return "EMERGENCY"
 
-    if any(term in q for term in MEDICATION_TERMS):
+    if any(x in q for x in MEDICATION_TERMS):
         return "MEDICATION"
 
-    if any(term in q for term in DIAGNOSIS_TERMS):
+    if any(x in q for x in DIAGNOSIS_TERMS):
         return "DIAGNOSIS"
 
     return "NORMAL"
 
 
 # ============================================================
-# SAFETY RESPONSE
+# SAFETY RESPONSES
 # ============================================================
 
 def safety_response(cat):
@@ -212,7 +199,7 @@ def retrieve(question):
             )
 
     results.sort(
-        key=lambda item: item[0],
+        key=lambda x: x[0],
         reverse=True
     )
 
@@ -223,7 +210,7 @@ def retrieve(question):
 
 
 # ============================================================
-# CALL HUGGING FACE
+# HUGGING FACE API
 # ============================================================
 
 def ask_model(question, context):
@@ -233,6 +220,7 @@ def ask_model(question, context):
         raise RuntimeError(
             "HF_TOKEN is not configured in Vercel."
         )
+
 
     system_prompt = """
 You are a heart-health educational assistant.
@@ -251,31 +239,34 @@ I don't have enough information in my current heart-health knowledge base to ans
 5. Keep answers concise and educational.
 """
 
-    payload = json.dumps(
-        {
-            "model": MODEL,
 
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
+    payload = json.dumps({
 
-                {
-                    "role": "user",
-                    "content":
-                        "CONTEXT:\n"
-                        + context
-                        + "\n\nQUESTION:\n"
-                        + question
-                }
-            ],
+        "model": MODEL,
 
-            "temperature": 0,
+        "messages": [
 
-            "max_tokens": 250
-        }
-    ).encode("utf-8")
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+
+            {
+                "role": "user",
+                "content":
+                    "CONTEXT:\n"
+                    + context
+                    + "\n\nQUESTION:\n"
+                    + question
+            }
+
+        ],
+
+        "temperature": 0,
+
+        "max_tokens": 250
+
+    }).encode("utf-8")
 
 
     request = Request(
@@ -285,11 +276,13 @@ I don't have enough information in my current heart-health knowledge base to ans
         data=payload,
 
         headers={
+
             "Authorization":
                 "Bearer " + HF_TOKEN,
 
             "Content-Type":
                 "application/json"
+
         },
 
         method="POST"
@@ -373,11 +366,10 @@ def generate_answer(question):
     cat = category(question)
 
 
-    # Safety response
-
     if cat != "NORMAL":
 
         return {
+
             "answer":
                 safety_response(cat),
 
@@ -386,19 +378,17 @@ def generate_answer(question):
 
             "category":
                 cat
+
         }
 
 
-    # Retrieve documents
-
-    documents = retrieve(
-        question
-    )
+    documents = retrieve(question)
 
 
     if not documents:
 
         return {
+
             "answer":
                 INSUFFICIENT,
 
@@ -407,27 +397,25 @@ def generate_answer(question):
 
             "category":
                 "INSUFFICIENT_CONTEXT"
+
         }
 
-
-    # Build context
 
     context = "\n\n---\n\n".join(
 
         "SOURCE: "
-        + document["source"]
+        + d["source"]
 
         + "\nTITLE: "
-        + document["title"]
+        + d["title"]
 
         + "\n"
-        + document["text"]
+        + d["text"]
 
-        for document in documents
+        for d in documents
+
     )
 
-
-    # Ask AI
 
     try:
 
@@ -437,22 +425,21 @@ def generate_answer(question):
         )
 
 
-    except Exception as error:
+    except Exception as e:
 
         return {
+
             "answer":
-                "AI ERROR: "
-                + str(error),
+                f"AI ERROR: {str(e)}",
 
             "sources":
                 [],
 
             "category":
                 "ERROR"
+
         }
 
-
-    # Return result
 
     return {
 
@@ -462,32 +449,35 @@ def generate_answer(question):
         "sources":
 
             [
+
                 {
+
                     "source":
-                        document["source"],
+                        d["source"],
 
                     "title":
-                        document["title"],
+                        d["title"],
 
                     "url":
-                        document["url"]
+                        d["url"]
+
                 }
 
-                for document in documents
+                for d in documents
+
             ],
 
         "category":
             "NORMAL"
+
     }
 
 
 # ============================================================
-# VERCEL HANDLER
+# VERCEL SERVERLESS HANDLER
 # ============================================================
 
-class handler(
-    BaseHTTPRequestHandler
-):
+class handler(BaseHTTPRequestHandler):
 
 
     def send_json(
@@ -539,23 +529,26 @@ class handler(
         )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # OPTIONS
-    # --------------------------------------------------------
+    # ========================================================
 
     def do_OPTIONS(self):
 
         self.send_json(
+
             200,
+
             {
                 "ok": True
             }
+
         )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # GET
-    # --------------------------------------------------------
+    # ========================================================
 
     def do_GET(self):
 
@@ -564,49 +557,57 @@ class handler(
             200,
 
             {
+
                 "status":
                     "ok",
 
                 "message":
                     "Heart Health RAG API is running."
+
             }
+
         )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # POST
-    # --------------------------------------------------------
+    # ========================================================
 
     def do_POST(self):
 
         try:
 
             length = int(
+
                 self.headers.get(
                     "Content-Length",
                     "0"
                 )
+
             )
 
 
-            raw_body = (
-                self.rfile
-                .read(length)
+            body = self.rfile.read(
+                length
             )
 
 
             data = json.loads(
-                raw_body.decode(
+
+                body.decode(
                     "utf-8"
                 )
+
             )
 
 
             question = str(
+
                 data.get(
                     "question",
                     ""
                 )
+
             ).strip()
 
 
@@ -620,6 +621,7 @@ class handler(
                         "error":
                             "Please enter a question."
                     }
+
                 )
 
                 return
@@ -636,7 +638,7 @@ class handler(
             )
 
 
-        except Exception as error:
+        except Exception as e:
 
             self.send_json(
 
@@ -644,6 +646,7 @@ class handler(
 
                 {
                     "error":
-                        str(error)
+                        str(e)
                 }
+
             )
