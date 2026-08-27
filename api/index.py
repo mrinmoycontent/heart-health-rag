@@ -276,14 +276,13 @@ def generate_answer(question):
         for d in documents
     )
 
-    try:
-
+        try:
         answer = ask_model(
             question,
             context
         )
 
-        except Exception as e:
+    except Exception as e:
         return {
             "answer": f"AI ERROR: {str(e)}",
             "sources": [],
