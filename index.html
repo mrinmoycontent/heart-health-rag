@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Health Assistant</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 30px 20px;
+            background: #f5f6f8;
+            color: #222;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .warning {
+            background: #fff3f3;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 14px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            resize: vertical;
+        }
+
+        button {
+            margin-top: 12px;
+            padding: 11px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        .submit {
+            background: #222;
+            color: white;
+        }
+
+        .example {
+            background: #eee;
+            margin-right: 5px;
+        }
+
+        #result {
+            margin-top: 25px;
+            line-height: 1.6;
+        }
+
+        .source {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+
+        a {
+            color: #1467c7;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>❤️ Heart Health Assistant</h1>
+
+    <p>
+        An AI-powered educational assistant using
+        Retrieval-Augmented Generation (RAG).
+    </p>
+
+    <div class="warning">
+        <strong>Important:</strong>
+        This chatbot provides general educational information
+        and is not a doctor or a diagnostic tool.
+    </div>
+
+    <h3>Ask a question</h3>
+
+    <textarea
+        id="question"
+        rows="4"
+        placeholder="Ask a general heart-health question..."
+    ></textarea>
+
+    <br>
+
+    <button class="submit" onclick="askQuestion()">
+        Ask
+    </button>
+
+    <button onclick="clearQuestion()">
+        Clear
+    </button>
+
+    <h3>Examples</h3>
+
+    <button class="example"
+        onclick="setQuestion('What foods can support a healthy heart?')">
+        Healthy foods
+    </button>
+
+    <button class="example"
+        onclick="setQuestion('How does smoking affect heart health?')">
+        Smoking
+    </button>
+
+    <button class="example"
+        onclick="setQuestion('What lifestyle changes can improve heart health?')">
+        Lifestyle
+    </button>
+
+    <div id="result"></div>
+
+</div>
+
+<script>
+
+function setQuestion(text) {
+    document.getElementById("question").value = text;
+}
+
+function clearQuestion() {
+    document.getElementById("question").value = "";
+    document.getElementById("result").innerHTML = "";
+}
+
+async function askQuestion() {
+
+    const question =
+        document.getElementById("question").value.trim();
+
+    const result =
+        document.getElementById("result");
+
+    if (!question) {
+        result.innerHTML =
+            "<p>Please enter a question.</p>";
+        return;
+    }
+
+    result.innerHTML =
+        "<p>⏳ Thinking...</p>";
+
+    try {
+
+        const response = await fetch(
+            "/api/index",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    question: question
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        let html =
+            "<h3>Answer</h3>" +
+            "<p>" +
+            escapeHtml(data.answer || data.error) +
+            "</p>";
+
+        if (
+            data.sources &&
+            data.sources.length > 0
+        ) {
+
+            html +=
+                "<div class='source'>" +
+                "<h3>📚 Sources</h3>";
+
+            data.sources.forEach(function(source) {
+
+                html +=
+                    "<p><strong>" +
+                    escapeHtml(source.source) +
+                    "</strong><br>" +
+                    escapeHtml(source.title) +
+                    "<br>" +
+                    "<a href='" +
+                    source.url +
+                    "' target='_blank'>" +
+                    "View source" +
+                    "</a></p>";
+
+            });
+
+            html += "</div>";
+        }
+
+        result.innerHTML = html;
+
+    } catch (error) {
+
+        result.innerHTML =
+            "<p>⚠️ Unable to connect to the Heart Health API.</p>";
+    }
+}
+
+function escapeHtml(text) {
+
+    return String(text).replace(
+        /[&<>"']/g,
+        function(character) {
+
+            return {
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#039;"
+            }[character];
+
+        }
+    );
+}
+
+</script>
+
+</body>
+</html>
