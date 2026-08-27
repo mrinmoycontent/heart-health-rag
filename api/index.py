@@ -8,10 +8,8 @@ from urllib.error import HTTPError, URLError
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
-MODEL = os.environ.get(
-    "HF_MODEL",
-    "openai/gpt-oss-120b:groq"
-)
+# Fixed provider: Groq
+MODEL = "openai/gpt-oss-120b:groq"
 
 
 DOCUMENTS = [
@@ -235,7 +233,6 @@ I don't have enough information in my current heart-health knowledge base to ans
     )
 
     try:
-
         with urlopen(
             request,
             timeout=60
