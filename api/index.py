@@ -10,7 +10,7 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 
 MODEL = os.environ.get(
     "HF_MODEL",
-    "Qwen/Qwen2.5-7B-Instruct:fastest"
+    "Qwen/Qwen2-7B-Instruct"
 )
 
 
@@ -245,7 +245,10 @@ I don't have enough information in my current heart-health knowledge base to ans
 
     except HTTPError as e:
 
-        error_body = e.read().decode("utf-8", errors="replace")
+        error_body = e.read().decode(
+            "utf-8",
+            errors="replace"
+        )
 
         raise RuntimeError(
             f"Hugging Face HTTP {e.code}: {error_body}"
@@ -260,6 +263,7 @@ I don't have enough information in my current heart-health knowledge base to ans
     data = json.loads(response_body)
 
     try:
+
         return data["choices"][0]["message"]["content"].strip()
 
     except (KeyError, IndexError, TypeError):
