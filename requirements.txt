@@ -1,0 +1,8 @@
+gradio
+chromadb
+sentence-transformers
+transformers
+torch
+accelerate
+langchain-core
+langchain-text-splitters
