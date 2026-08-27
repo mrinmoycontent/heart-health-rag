@@ -3,12 +3,16 @@ import json
 import re
 from http.server import BaseHTTPRequestHandler
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
+
 MODEL = os.environ.get(
     "HF_MODEL",
     "Qwen/Qwen2.5-7B-Instruct:fastest"
 )
+
 
 DOCUMENTS = [
     {
@@ -48,6 +52,7 @@ alcohol use can reduce cardiovascular risk.
     }
 ]
 
+
 EMERGENCY_TERMS = [
     "severe chest pain",
     "chest pain",
@@ -62,6 +67,7 @@ EMERGENCY_TERMS = [
     "stroke symptoms"
 ]
 
+
 MEDICATION_TERMS = [
     "what medication should i take",
     "which medicine should i take",
@@ -73,6 +79,7 @@ MEDICATION_TERMS = [
     "should i stop my medication"
 ]
 
+
 DIAGNOSIS_TERMS = [
     "do i have heart disease",
     "do i have a heart attack",
@@ -80,6 +87,7 @@ DIAGNOSIS_TERMS = [
     "diagnose me",
     "what disease do i have"
 ]
+
 
 INSUFFICIENT = (
     "I don't have enough information in my current heart-health "
@@ -90,13 +98,13 @@ INSUFFICIENT = (
 def category(question):
     q = question.lower().strip()
 
-    if any(x in q for x in EMERGENCY_TERMS):
+    if any(term in q for term in EMERGENCY_TERMS):
         return "EMERGENCY"
 
-    if any(x in q for x in MEDICATION_TERMS):
+    if any(term in q for term in MEDICATION_TERMS):
         return "MEDICATION"
 
-    if any(x in q for x in DIAGNOSIS_TERMS):
+    if any(term in q for term in DIAGNOSIS_TERMS):
         return "DIAGNOSIS"
 
     return "NORMAL"
@@ -162,7 +170,7 @@ def retrieve(question):
             )
 
     results.sort(
-        key=lambda x: x[0],
+        key=lambda item: item[0],
         reverse=True
     )
 
@@ -176,7 +184,7 @@ def ask_model(question, context):
 
     if not HF_TOKEN:
         raise RuntimeError(
-            "HF_TOKEN is not configured."
+            "HF_TOKEN is not configured in Vercel."
         )
 
     system_prompt = """
@@ -226,22 +234,40 @@ I don't have enough information in my current heart-health knowledge base to ans
         method="POST"
     )
 
-    with urlopen(
-        request,
-        timeout=60
-    ) as response:
+    try:
 
-        data = json.loads(
-            response.read().decode("utf-8")
+        with urlopen(
+            request,
+            timeout=60
+        ) as response:
+
+            response_body = response.read().decode("utf-8")
+
+    except HTTPError as e:
+
+        error_body = e.read().decode("utf-8", errors="replace")
+
+        raise RuntimeError(
+            f"Hugging Face HTTP {e.code}: {error_body}"
         )
 
-    return data[
-        "choices"
-    ][0][
-        "message"
-    ][
-        "content"
-    ].strip()
+    except URLError as e:
+
+        raise RuntimeError(
+            f"Unable to connect to Hugging Face: {e.reason}"
+        )
+
+    data = json.loads(response_body)
+
+    try:
+        return data["choices"][0]["message"]["content"].strip()
+
+    except (KeyError, IndexError, TypeError):
+
+        raise RuntimeError(
+            "Unexpected Hugging Face response: "
+            + json.dumps(data)
+        )
 
 
 def generate_answer(question):
@@ -268,23 +294,25 @@ def generate_answer(question):
 
     context = "\n\n---\n\n".join(
         "SOURCE: "
-        + d["source"]
+        + document["source"]
         + "\nTITLE: "
-        + d["title"]
+        + document["title"]
         + "\n"
-        + d["text"]
-        for d in documents
+        + document["text"]
+        for document in documents
     )
 
-        try:
+    try:
+
         answer = ask_model(
             question,
             context
         )
 
     except Exception as e:
+
         return {
-            "answer": f"AI ERROR: {str(e)}",
+            "answer": "AI ERROR: " + str(e),
             "sources": [],
             "category": "ERROR"
         }
@@ -293,11 +321,11 @@ def generate_answer(question):
         "answer": answer,
         "sources": [
             {
-                "source": d["source"],
-                "title": d["title"],
-                "url": d["url"]
+                "source": document["source"],
+                "title": document["title"],
+                "url": document["url"]
             }
-            for d in documents
+            for document in documents
         ],
         "category": "NORMAL"
     }
@@ -308,7 +336,8 @@ class handler(BaseHTTPRequestHandler):
     def send_json(self, status, data):
 
         body = json.dumps(
-            data
+            data,
+            ensure_ascii=False
         ).encode("utf-8")
 
         self.send_response(status)
@@ -368,8 +397,10 @@ class handler(BaseHTTPRequestHandler):
                 )
             )
 
+            raw_body = self.rfile.read(length)
+
             data = json.loads(
-                self.rfile.read(length).decode("utf-8")
+                raw_body.decode("utf-8")
             )
 
             question = str(
@@ -384,8 +415,7 @@ class handler(BaseHTTPRequestHandler):
                 self.send_json(
                     400,
                     {
-                        "error":
-                        "Please enter a question."
+                        "error": "Please enter a question."
                     }
                 )
 
@@ -400,12 +430,11 @@ class handler(BaseHTTPRequestHandler):
                 result
             )
 
-        except Exception:
+        except Exception as e:
 
             self.send_json(
                 500,
                 {
-                    "error":
-                    "Unable to process the request."
+                    "error": str(e)
                 }
             )
