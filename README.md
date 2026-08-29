@@ -1,7 +1,6 @@
 # ❤️ Heart Health Assistant
 
-🌐 Live App: https://heart-health-rag-mrinmoyseo-s-projects.vercel.app
-
+🌐 Live App: https://heart-health-rag.vercel.app/
 The Heart Health Assistant is an AI-powered educational web application that uses Retrieval-Augmented Generation (RAG) to provide source-grounded information about heart health. Users can ask general questions about healthy eating, physical activity, smoking and tobacco, sleep, weight, cholesterol, blood sugar, blood pressure, and cardiovascular health. The application retrieves relevant information from a curated heart-health knowledge base and uses an AI model to generate concise educational responses.
 
 The current knowledge base contains information from the American Heart Association's Life's Essential 8 and the World Health Organization's Cardiovascular Diseases resources. The application displays supporting sources with normal answers so users can identify where the information comes from.
